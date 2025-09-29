@@ -1,0 +1,50 @@
+first quicly create les endpoints pour afficher les donnees 
+
+/login_dashboard => username and Password { username , Password}
+
+/create_pack { basic , montant , rayon_de_Livraison , nombre_de_livraison , }
+/update_pack { id_pack }
+/read_pack 
+/delete_pack { id_pack }
+
+// gerer les abonnements 
+    /suspendre { id_client_abonemment }
+    /modifier un abonnements { id_abonnement}
+    /supprimer un abonnement { id_abonnement }
+    /
+
+// statisques 
+
+   /stat
+    
+// Mobile 
+
+ client => onglet abonnement 
+
+     /mobile/api/client/suscription/:{} souscrire a un abonnement => we need { id_client , id_pack , date_souscription , method_payment , status_transaction , status_abonnement   } and we are return { code d'abonnement partageable }
+        -  if payement successful || Status changes from Inactif to Actif
+     /mobile/api/client/transaction_init : { amount , aggreateur } 
+     /mobile/api/client/check_status request: client_id  => request to  table_abonnement => if(found and Actif and livraison> 0 and date inferieur a  enddate)
+     /mobile/api/get_pack 
+     /
+
+ client commandes
+
+    - La commande se fait normalement sauf que cest les frais de Livraison qui sont Gratuite !
+
+    - 
+
+
+Nous avons de :
+
+  /suscriber:id_client
+  // qui permet de recevoir lid de client et retourne son Actif if () => Status = Actif AND Nblivraison < limit_livraison AND  date_end < today
+
+  if Client Actif : 
+     
+      - Actif 
+      - Code d'abonnement
+      - date_end
+      
+
+Nous devons aussi regler le truc de Lien on click pour aller sur 
