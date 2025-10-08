@@ -34,5 +34,6 @@ export class Suscription {
    @Column()
   status_abonnement : number ;
 
- 
+  @CreateDateColumn({ type: 'timestamp' })
+  created_at: Date; 
 }

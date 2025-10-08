@@ -87,29 +87,38 @@ export class SuscriptionService {
   return `${year}-${month}-${day}`;
 }
 
-
 async create(aboData: suscriptionDto) {
   try {
-    // 1️⃣ Check if an active subscription exists
-    const existing = await this.repo.findOneBy({
-      user_id: aboData.user_id,
-      status_abonnement: 1, // active subscription
-    });
+    // 🔍 Get the last subscription for this user
+    const existing = await this.repo.find({
+      where: { user_id: aboData.user_id },
+      order: { created_at: 'DESC' },
+      take: 1,
+    }).then(results => results[0]);
 
     if (existing) {
-      // User already has an active subscription
-      throw new ConflictException("L'utilisateur a déjà un abonnement actif.");    
+      // 🧾 If last subscription payment was not completed, delete it
+      if (existing.status_payement === 0) {
+        console.log('🗑️ Previous unpaid subscription found, deleting it...');
+        await this.repo.remove(existing);
+      }
+
+      // 🚫 If last subscription is active (paid), block new one
+      else if (existing.status_abonnement === 1 && existing.status_payement === 1) {
+        throw new ConflictException("L'utilisateur a déjà un abonnement actif.");
+      }
     }
 
-    // 2️⃣ Generate code and end date
+    // 🧩 Generate subscription details
     const code = this.generateSubscriptionCode(
       aboData.user_id,
       aboData.subscription_id,
       aboData.start_date,
     );
+
     const endDate = this.calculateEndDate(aboData.start_date, 30);
 
-    // 3️⃣ Create new subscription
+    // 🆕 Create new subscription entry
     const newPack = this.repo.create({
       user_id: aboData.user_id,
       subscription_id: aboData.subscription_id,
@@ -118,24 +127,27 @@ async create(aboData: suscriptionDto) {
       payement_method: aboData.payement_method,
       status_payement: 0,
       status_abonnement: 0,
-      transaction_id: ' ',
+      transaction_id: '',
       codeAbonnement: code,
     });
 
-    // 4️⃣ Save to database
+    // 💾 Save new record
     return await this.repo.save(newPack);
-  } catch (error) {
-    console.error(error);
 
-    // Handle duplicate entry error (DB constraint)
-    if (error.code === '23505') {
+  } catch (error) {
+    console.error('❌ Subscription creation error:', error);
+
+    if (error.code === '23505' || error.code === 'ER_DUP_ENTRY') {
       throw new ConflictException('Cet utilisateur a déjà un abonnement en base.');
     }
 
-    // Rethrow as proper HTTP error
-    throw new InternalServerErrorException("Impossible de créer l'abonnement");
+    throw new InternalServerErrorException("Impossible de créer l'abonnement.");
   }
 }
+
+
+
+
 
 
 
@@ -209,8 +221,9 @@ async saveBeneficiary(sharedAbo: sharedAbo) {
        }
        // this is the else instrcuction 
        
-       return this.repo.remove(pack) ;
+      return this.repo.remove(pack) ;
  } */
 
 
 }
+
