@@ -6,7 +6,7 @@ export class updateabodto {
    
 
      @IsString()  
-     user_id : string ; 
+     id : string ; 
 
      @IsNumber()
      status_payement : number ;
@@ -14,8 +14,7 @@ export class updateabodto {
      @IsString()
      transaction_id : string ;
      
-     @IsNumber()
-     status_abonnement : number ;  
+     
     
 
 

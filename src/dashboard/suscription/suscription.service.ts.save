@@ -1,4 +1,3 @@
-
 import { ConflictException, Injectable, InternalServerErrorException, NotFoundException } from "@nestjs/common";
 import { Repository } from "typeorm";
 import { InjectRepository } from "@nestjs/typeorm";
@@ -194,24 +193,21 @@ async saveBeneficiary(sharedAbo: sharedAbo) {
 
 
 
-async updateabo(user_id: string, attrs: Partial<updateabodto>) {
-  // 🔍 Find the subscription by user_id
-  const abo = await this.repo.findOne({
-    where: { user_id: user_id },
-  });
-
-  if (!abo) {
-    throw new Error('Subscription not found');
-  }
-
-  // 🧾 Merge the new attributes
-  Object.assign(abo, attrs);
-
-  // 💾 Save to database
-  return await this.repo.save(abo);
-}
+ 
 
 
+ async updateabo(id:number , attrs:Partial<updateabodto>) {
+       const pack = await this.repo.findOne({
+          where: { id: id }
+       });
+        
+       if(!pack){
+         throw new Error('Suscription not found ') ;
+       }
+       // this is the else instrcuction 
+      Object.assign(pack , attrs)
+       return await this.repo.save(pack) ; 
+    } 
 
 
  /* async supendpack() {

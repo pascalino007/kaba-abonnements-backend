@@ -91,12 +91,13 @@ export class DashboardController {
     return this.packService.updatepack(id, body);
   }
 
-   @Patch('/update_abo/')
-  updateabo(@Body() body: updateabodto ) {
-    const id = body.id;
-    console.log(id);
-    console.log(body);
-    return this.suscripionService.updateabo(parseInt(id) , body );
+   @Post('/update_abo')
+   updateabo(@Body() body: updateabodto) {
+  const user_id = body.user_id;
+  console.log('ID:', user_id);
+  console.log('BODY:', body);
+
+  return this.suscripionService.updateabo(user_id, body);
   }
 
   @Delete('/delete/:id')
