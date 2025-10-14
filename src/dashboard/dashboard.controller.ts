@@ -51,6 +51,16 @@ export class DashboardController {
     @Get('/subscribeduser/:user_id')
   getUserDetails(@Param('user_id') user_id: string) {
     return this.suscripionService.findOne(user_id);
+
+  }
+
+
+   @Get('subscription/:userId')
+  checkSubscription(@Param('userId') userId: string) {
+    console.log(`Checking subscription for user: ${userId}`);
+    return {
+      state: 1, // always active for testing
+    };
   }
 
 
