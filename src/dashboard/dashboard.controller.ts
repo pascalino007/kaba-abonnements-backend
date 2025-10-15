@@ -14,8 +14,10 @@ import { suscriptionDto } from './dtos/create-abo';
 import { updatePackDto } from './dtos/update-pack.dto';
 import { PackService } from './pack/pack.service';
 import { SuscriptionService } from './suscription/suscription.service';
+import { AboOrdersService } from './abo-orders/abo-orders.service';
 import { updateabodto } from './dtos/update-abo.dto';
 import { sharedAbo } from './dtos/sharedAbo';
+import { OrderDto } from './dtos/create-order';
 
 @Controller('dashboard')
 export class DashboardController {
@@ -24,6 +26,7 @@ export class DashboardController {
   constructor(
     private packService: PackService,
     private suscripionService: SuscriptionService,
+    private AboOrdersService: AboOrdersService,
   ) {}
 
   // get all pack
@@ -43,9 +46,17 @@ export class DashboardController {
     return this.packService.search(search);
   }
 
+
+
+
   @Get('/:id_pack')
   async getPack(@Param('id_pack') id: string) {
     return this.packService.findOne(parseInt(id));
+  }
+
+  @Get('/countorders/:user_id')
+  async getCountUserOrder(@Param('user_id') user_id: string) {
+    return this.AboOrdersService.countUserOrders(user_id);
   }
 
     @Get('/subscribeduser/:user_id')
@@ -72,7 +83,22 @@ export class DashboardController {
      });
   
 
+  };
+
+
+  @Post('/create-order')
+  async createOrder(@Body() orderDto: OrderDto) {
+    return this.AboOrdersService.createOrder(orderDto);
+  };
+
+@Post('/currentUserAbodetails')
+CurrentUserAbo(@Body() body: { userId: string }) {
+  if (!body || !body.userId) {
+    return { status: 'error', message: 'userId is required' };
   }
+  return this.suscripionService.getUserSubscriptionWithPack(body.userId);
+};
+
 
   @Post('/new_pack')
   createPack(@Body() body: createPackDto) {

@@ -8,6 +8,8 @@ import { suscriptionDto } from "../dtos/create-abo";
 import * as crypto from 'crypto'
 import { updateabodto } from "../dtos/update-abo.dto";
 import { sharedAbo } from "../dtos/sharedAbo";
+import { AboOrders } from "../abo-orders/abo-orders.entity";
+import { AboOrdersService } from "../abo-orders/abo-orders.service";
 
 
 
@@ -47,13 +49,65 @@ export class SuscriptionService {
     
 
     // We are using Dependency Injection 
-    constructor( @InjectRepository(Suscription) private repo:Repository<Suscription>) {}
+    constructor(
+       @InjectRepository(Suscription) private repo:Repository<Suscription>,
+       private readonly aboOrdersService: AboOrdersService
+      ) {}
 
   
 
     async findAll() {
         return this.repo.find();
     }
+
+   async getUserSubscriptionWithPack(userId: string) {
+    console.log(`Fetching subscription for user: ${userId}`);
+    const subscription = await this.repo
+      .createQueryBuilder('s')
+      .innerJoinAndSelect('s.pack', 'p')
+      
+      .where('s.user_id = :userId', { userId })
+      // subscription has started
+      .andWhere('s.status_abonnement = :active', { active: 1 }) // only active subscriptions
+      .getOne();
+
+    if (!subscription) {
+      return {
+        status: 'none',
+        message: 'No active subscription found',
+      };
+    }
+  
+     const alreadyUsed = await this.aboOrdersService.countUserOrders(userId);
+
+
+    return {
+      status: 'success',
+      
+      user_id: subscription.user_id,
+      start_date: subscription.start_date,
+      end_date: subscription.end_date,
+      payement_method: subscription.payement_method,
+      transaction_id: subscription.transaction_id,
+      codeAbonnement: subscription.codeAbonnement,
+      pack: {
+        id: subscription.pack.id,
+        name: subscription.pack.name,
+        price: subscription.pack.price,
+        duration_days: subscription.pack.duration_days,
+        color: subscription.pack.color,
+        radius_km: subscription.pack.radius_km,
+        deliverylimit: subscription.pack.deliverylimit,
+        discount_on_order: subscription.pack.discount_on_order,
+        max_shared_users: subscription.pack.max_shared_users,
+        other_benefits: subscription.pack.other_benefits,
+        is_active: subscription.pack.is_active,
+        min_order_amount: subscription.pack.min_order_amount,
+        is_shareable: subscription.pack.is_shareable,
+      },
+      alreadyUsed ,
+    }
+  };
 
     /*  async search(search:string) {
         return this.repo.find({
@@ -122,7 +176,7 @@ async create(aboData: suscriptionDto) {
     // 🆕 Create new subscription entry
     const newPack = this.repo.create({
       user_id: aboData.user_id,
-      subscription_id: aboData.subscription_id,
+      subscription_id: typeof aboData.subscription_id === 'string' ? parseInt(aboData.subscription_id, 10) : aboData.subscription_id,
       start_date: aboData.start_date,
       end_date: endDate,
       payement_method: aboData.payement_method,
@@ -183,7 +237,7 @@ async saveBeneficiary(sharedAbo: sharedAbo) {
 
   const newPack = this.repo.create({
     user_id: sharedAbo.user_id,
-    subscription_id: subscription.subscription_id,
+    subscription_id: typeof subscription.subscription_id === 'string' ? parseInt(subscription.subscription_id, 10) : subscription.subscription_id,
     start_date: startDate,
     end_date: endDate,
     payement_method: subscription.payement_method ?? 'shared',
@@ -240,3 +294,5 @@ async updateabo(user_id: string, attrs: Partial<updateabodto>) {
 
 
 }
+
+

@@ -6,6 +6,10 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { Pack } from './pack/pack.entity';
 import { Suscription } from './suscription/suscription.entity';
 import { SuscriptionService } from './suscription/suscription.service';
+import { AboOrdersService } from './abo-orders/abo-orders.service';
+import { AboHistoryService } from './abo-history/abo-history.service';
+import { AboOrders } from './abo-orders/abo-orders.entity';
+import { AboHistory } from './abo-history/abo-history.entity';
 
 @Module({
   imports:[TypeOrmModule.forRoot({
@@ -14,16 +18,16 @@ import { SuscriptionService } from './suscription/suscription.service';
     port: 3306,
     database:'abonnements',
     username:'root',
-    password: 'kabadelivery',
+    password: 'password',
   autoLoadEntities: true,
   synchronize: true,
   entities:[Pack]
 
   }),
-  TypeOrmModule.forFeature([Pack,Suscription])
+  TypeOrmModule.forFeature([Pack,Suscription, AboOrders, AboHistory])
 
 ],
   controllers: [DashboardController],
-  providers:[PackService,SuscriptionService],
+  providers:[PackService,SuscriptionService, AboOrdersService, AboHistoryService],
 })
 export class DashboardModule {}
