@@ -71,7 +71,7 @@ export class SuscriptionService {
     const hash = crypto.createHash('sha256').update(rawString).digest('hex');
 
     // return first 12 characters as code (customize length as needed)
-    return hash.substring(0, 12).toUpperCase();
+    return hash.substring(0, 6).toUpperCase();
   }
 
  calculateEndDate(startDate: string | Date, days: number): string {
@@ -146,50 +146,60 @@ async create(aboData: suscriptionDto) {
   }
 }
 
-
-
-
-
-
-
 async saveBeneficiary(sharedAbo: sharedAbo) {
   // 1️⃣ Find subscription by code
   const subscription = await this.repo.findOne({
     where: { codeAbonnement: sharedAbo.Code },
   });
 
-  const existingclient = await this.repo.findOneBy({
-      user_id: sharedAbo.user_id,
-      status_abonnement: 1, // active subscription
-    });
+  // 2️⃣ Check if the user already has a subscription
+  const existingClient = await this.repo.findOneBy({
+    user_id: sharedAbo.user_id,
+  });
 
-  /* // find if shared_user does not have this user 
-      const shareduser = await this.repo.findOne({
-    where: { codeAbonnement: sharedAbo.Code },
-  });  */
-  //
-
-  // 2️⃣ If subscription not found
-  if (Suscription != null && existingclient == null) {
-     const newPack = this.repo.create({
-      user_id: sharedAbo.user_id,
-      subscription_id: subscription?.subscription_id || "",
-      start_date: subscription?.start_date,
-      end_date:  subscription?.end_date,
-      payement_method: subscription?.payement_method,
-      status_payement: subscription?.status_payement ,
-      status_abonnement:subscription?.status_abonnement ,
-      transaction_id: ' ',
-      codeAbonnement: subscription?.codeAbonnement ,
-    });
-
-    // 4️⃣ Save to database
-    return await this.repo.save(newPack);
+  // 3️⃣ If subscription not found, return error
+  if (!subscription) {
+    throw new NotFoundException(
+      `Subscription with code ${sharedAbo.Code} not found`
+    );
   }
 
-  // 3️⃣ Return all subscription data
-  //return subscription;
+  // 4️⃣ Handle existing subscription
+  if (existingClient) {
+    if (existingClient.status_abonnement === 1) {
+      // Active subscription → block
+      throw new ConflictException(
+        `User ${sharedAbo.user_id} already has an active subscription`
+      );
+    } else if (existingClient.status_abonnement === 0) {
+      // Pending subscription → delete it
+      await this.repo.delete({ user_id : existingClient.user_id });
+    }
+  }
+
+  // 5️⃣ Create new subscription entry for beneficiary
+  const startDate = subscription.start_date ?? new Date();
+  const endDate = subscription.end_date ?? this.calculateEndDate(new Date(), 25);
+
+  const newPack = this.repo.create({
+    user_id: sharedAbo.user_id,
+    subscription_id: subscription.subscription_id,
+    start_date: startDate,
+    end_date: endDate,
+    payement_method: subscription.payement_method ?? 'shared',
+    status_payement: subscription.status_payement ?? 1,
+    status_abonnement: subscription.status_abonnement ?? 1,
+    transaction_id: '',
+    codeAbonnement: subscription.codeAbonnement,
+  });
+
+  // 6️⃣ Save to database
+  return await this.repo.save(newPack);
 }
+
+
+
+
 
 
 
@@ -230,4 +240,3 @@ async updateabo(user_id: string, attrs: Partial<updateabodto>) {
 
 
 }
-

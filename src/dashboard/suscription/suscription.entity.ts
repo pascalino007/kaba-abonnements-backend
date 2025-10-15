@@ -7,7 +7,7 @@ export class Suscription {
   @PrimaryGeneratedColumn()
   id: number;
   
- @Column({ unique: true }) 
+ @Column() 
   user_id: string;
 
   @Column()
