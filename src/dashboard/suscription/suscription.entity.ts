@@ -1,7 +1,8 @@
 import { Optional } from '@nestjs/common';
 import { IsString } from 'class-validator';
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, Unique, ManyToOne, JoinColumn } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, Unique, ManyToOne, JoinColumn, OneToMany } from 'typeorm';
 import { Pack } from '../pack/pack.entity';
+import { AboOrders } from '../abo-orders/abo-orders.entity';
 
 @Entity('suscription')
 export class Suscription {
@@ -42,4 +43,7 @@ export class Suscription {
 
   @CreateDateColumn({ type: 'timestamp' })
   created_at: Date; 
+
+  @OneToMany(() => AboOrders, (order) => order.subscription)
+  orders: AboOrders[];
 }

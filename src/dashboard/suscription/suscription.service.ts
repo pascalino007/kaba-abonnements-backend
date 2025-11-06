@@ -1,5 +1,4 @@
-
-import { ConflictException, Injectable, InternalServerErrorException, NotFoundException } from "@nestjs/common";
+import { ConflictException, Injectable, InternalServerErrorException, NotFoundException, Logger } from "@nestjs/common";
 import { Repository } from "typeorm";
 import { InjectRepository } from "@nestjs/typeorm";
 import { Suscription } from "./suscription.entity";
@@ -10,13 +9,16 @@ import { updateabodto } from "../dtos/update-abo.dto";
 import { sharedAbo } from "../dtos/sharedAbo";
 import { AboOrders } from "../abo-orders/abo-orders.entity";
 import { AboOrdersService } from "../abo-orders/abo-orders.service";
-
+import { UserSharedService } from "../user_shared/user_shared.service";
+import { AboHistoryService } from "../abo-history/abo-history.service";
+import { PackService } from "../pack/pack.service";
+import { Cron, CronExpression } from '@nestjs/schedule';
 
 
 // This is makes this calls Injectable 
 @Injectable()
 export class SuscriptionService {
-
+  private readonly logger = new Logger(SuscriptionService.name);
 
    findOne(user_id: string) {
     return this.repo.findOneBy({ user_id });
@@ -51,14 +53,67 @@ export class SuscriptionService {
     // We are using Dependency Injection 
     constructor(
        @InjectRepository(Suscription) private repo:Repository<Suscription>,
-       private readonly aboOrdersService: AboOrdersService
+       private readonly aboOrdersService: AboOrdersService ,
+       private readonly UserSharedService: UserSharedService ,
+       private readonly AboHistoryService: AboHistoryService,
+       private readonly packService : PackService ,
       ) {}
 
   
 
-    async findAll() {
-        return this.repo.find();
-    }
+async findAll() {
+  console.log('Fetching all active subscriptions');
+
+  // 1️⃣ Fetch all active subscriptions with their packs
+  const subscriptions = await this.repo.find({
+    
+    relations: ['pack'],
+  });
+
+  // 2️⃣ If none found, return an empty array (frontend expects array)
+  if (!subscriptions.length) return [];
+
+  // 3️⃣ Build final data array
+  const results = await Promise.all(
+    subscriptions.map(async (subscription) => {
+      const alreadyUsed = await this.aboOrdersService.countUserOrders(subscription.codeAbonnement);
+      const usershared = await this.UserSharedService.countUserShared(subscription.codeAbonnement) ;
+      return {
+        user_id: subscription.user_id,
+        start_date: subscription.start_date,
+        end_date: subscription.end_date,
+        payement_method: subscription.payement_method,
+        transaction_id: subscription.transaction_id,
+        codeAbonnement: subscription.codeAbonnement,
+        status_abonnement: subscription.status_abonnement,
+        pack: {
+          id: subscription.pack.id,
+          name: subscription.pack.name,
+          price: subscription.pack.price,
+          duration_days: subscription.pack.duration_days,
+          color: subscription.pack.color,
+          radius_km: subscription.pack.radius_km,
+          deliverylimit: subscription.pack.deliverylimit,
+          discount_on_order: subscription.pack.discount_on_order,
+          max_shared_users: subscription.pack.max_shared_users,
+          other_benefits: subscription.pack.other_benefits,
+          is_active: subscription.pack.is_active,
+          min_order_amount: subscription.pack.min_order_amount,
+          is_shareable: subscription.pack.is_shareable,
+        },
+        alreadyUsed,
+        usershared ,
+      };
+    })
+  );
+
+  // 4️⃣ Return directly the array (no wrapper)
+  return results;
+}
+
+
+
+  
 
    async getUserSubscriptionWithPack(userId: string) {
     console.log(`Fetching subscription for user: ${userId}`);
@@ -145,15 +200,14 @@ export class SuscriptionService {
 async create(aboData: suscriptionDto) {
   try {
     // 🔍 Get the last subscription for this user
-    const existing = await this.repo.find({
+    const existing = await this.repo.findOne({
       where: { user_id: aboData.user_id },
-      order: { created_at: 'DESC' },
-      take: 1,
-    }).then(results => results[0]);
+      order: { start_date: 'DESC' },
+    });
 
     if (existing) {
       // 🧾 If last subscription payment was not completed, delete it
-      if (existing.status_payement === 0) {
+      if (existing.status_payement == 0) {
         console.log('🗑️ Previous unpaid subscription found, deleting it...');
         await this.repo.remove(existing);
       }
@@ -186,8 +240,35 @@ async create(aboData: suscriptionDto) {
       codeAbonnement: code,
     });
 
-    // 💾 Save new record
+     await this.UserSharedService.createUserShared({
+  user_id: aboData.user_id,
+  subscription_id: aboData.subscription_id,
+   codeAbonnement: code,
+});
+ const  getAboprice = await this.packService.getPackById(parseInt(aboData.subscription_id))
+    // before saving in create()
+    try {
+      await this.AboHistoryService.create({
+        user_id: aboData.user_id,
+        subscription_id: aboData.subscription_id,
+        transaction_id: 'N/A',
+        codeAbonnement: code,
+        PrixAbo: getAboprice!.price.toString(),
+        Nom_users: '1',
+        Num_commande_used: 'N/A',
+      });
+    } catch (err) {
+      if (err?.status === 409 || err?.code === 'ER_DUP_ENTRY' || (err?.message && err.message.includes('already'))) {
+        this.logger.warn(`AboHistory already exists for user ${aboData.user_id} - continuing`);
+      } else {
+        throw err;
+      }
+    }
+
+    // 💾 Save to database
     return await this.repo.save(newPack);
+
+
 
   } catch (error) {
     console.error('❌ Subscription creation error:', error);
@@ -246,7 +327,28 @@ async saveBeneficiary(sharedAbo: sharedAbo) {
     transaction_id: '',
     codeAbonnement: subscription.codeAbonnement,
   });
+  
 
+  await this.AboHistoryService.create({
+    user_id: sharedAbo.user_id,
+    subscription_id: subscription.subscription_id.toString(),
+    transaction_id: 'N/A',
+    codeAbonnement: subscription.codeAbonnement,
+    PrixAbo: '',
+    Nom_users: '1',
+    Num_commande_used: 'N/A',
+  }).catch(err => {
+    if (err?.status === 409 || err?.code === 'ER_DUP_ENTRY' || (err?.message && err.message.includes('already'))) {
+      this.logger.warn(`AboHistory already exists for beneficiary ${sharedAbo.user_id} - continuing`);
+    } else {
+      throw err;
+    }
+  });
+
+     await this.UserSharedService.createUserShared({
+  user_id: sharedAbo.user_id,
+  subscription_id: subscription.subscription_id.toString(),
+   codeAbonnement: subscription.codeAbonnement,})
   // 6️⃣ Save to database
   return await this.repo.save(newPack);
 }
@@ -265,34 +367,156 @@ async updateabo(user_id: string, attrs: Partial<updateabodto>) {
   });
 
   if (!abo) {
-    throw new Error('Subscription not found');
+    // return a proper Nest exception (makes debugging easier)
+    throw new NotFoundException('Subscription not found');
   }
 
   // 🧾 Merge the new attributes
   Object.assign(abo, attrs);
 
+ await this.UserSharedService.createUserShared({
+  user_id: abo.user_id,
+  subscription_id: abo.subscription_id.toString(),
+   codeAbonnement: abo.codeAbonnement,
+  });
+ const  getAboprice = await this.packService.getPackById(parseInt(abo.subscription_id.toString()))
+    try {
+      await this.AboHistoryService.create({
+        user_id: abo.user_id,
+        subscription_id: abo.subscription_id.toString(),
+        transaction_id: 'N/A',
+        codeAbonnement: abo.codeAbonnement,
+        PrixAbo: getAboprice!.price.toString(),
+        Nom_users: '1',
+        Num_commande_used: 'N/A',
+      });
+    } catch (err) {
+      if (err?.status === 409 || err?.code === 'ER_DUP_ENTRY' || (err?.message && err.message.includes('already'))) {
+        this.logger.warn(`AboHistory already exists for user ${abo.user_id} - continuing`);
+      } else {
+        throw err;
+      }
+    }
+
   // 💾 Save to database
+  //555
   return await this.repo.save(abo);
 }
 
 
+async findByUserAndCode(user_id: string, codeAbonnement: string): Promise<Suscription> {
+    const subscription = await this.repo.findOne({
+      where: { user_id, codeAbonnement },
+    });
 
+    if (!subscription) {
+      throw new NotFoundException(
+        `Subscription not found for user ${user_id} with code ${codeAbonnement}`,
+      );
+    }
 
- /* async supendpack() {
-        return this.repo.find();
- } */
+    return subscription;
+  }
 
- /*  async deletepack(id:number) {
-     const pack = await this.findOne(id) ;
-     if(!pack){
-         throw new Error('Pack not found ') ;
-       }
-       // this is the else instrcuction 
-       
-      return this.repo.remove(pack) ;
- } */
+  async checkSubscriptionValidity(subscription: Suscription): Promise<boolean> {
+  if (!subscription) return false;
 
+  // Check if subscription is active and paid
+  if (subscription.status_abonnement !== 1 || subscription.status_payement !== 1) {
+    return false;
+  }
 
+  // Check end date
+  const currentDate = new Date();
+  const endDate = new Date(subscription.end_date);
+  if (currentDate > endDate) {
+    await this.deactivateExpiredSubscription(subscription);
+    return false;
+  }
+
+  // Check delivery limits if they exist
+  const usedDeliveries = await this.aboOrdersService.countUserOrders(subscription.codeAbonnement);
+  const pack = await this.packService.getPackById(subscription.subscription_id);
+  
+  if (pack && usedDeliveries >= pack.deliverylimit) {
+    await this.deactivateExpiredSubscription(subscription);
+    return false;
+  }
+
+  return true;
 }
 
+private async deactivateExpiredSubscription(subscription: Suscription): Promise<void> {
+  try {
+    // Update subscription status
+    subscription.status_abonnement = 0;
+    
+    // Save the deactivated subscription
+    await this.repo.save(subscription);
 
+    // Create history entry for deactivation
+    /* await this.AboHistoryService.create({
+      user_id: subscription.user_id,
+      subscription_id: subscription.subscription_id.toString(),
+      transaction_id: 'EXPIRED',
+      codeAbonnement: subscription.codeAbonnement,
+      PrixAbo: '0',
+      Nom_users: '0',
+      Num_commande_used: 'DEACTIVATED',
+    }); */
+
+  } catch (error) {
+    console.error('Failed to deactivate subscription:', error);
+    throw new InternalServerErrorException('Failed to deactivate subscription');
+  }
+}
+
+@Cron(CronExpression.EVERY_DAY_AT_MIDNIGHT)
+async cleanupExpiredSubscriptions() {
+    this.logger.log('Starting daily subscription cleanup...');
+    try {
+      const activeSubscriptions = await this.repo.find({
+        where: { 
+          status_abonnement: 1,
+          status_payement: 1
+        }
+      });
+
+      this.logger.log(`Found ${activeSubscriptions.length} active subscriptions to check`);
+
+      for (const subscription of activeSubscriptions) {
+        const isValid = await this.checkSubscriptionValidity(subscription);
+        if (!isValid) {
+          this.logger.warn(`Deactivated expired subscription for user: ${subscription.user_id}`);
+        }
+      }
+
+      this.logger.log('Completed daily subscription cleanup');
+    } catch (error) {
+      this.logger.error('Failed to cleanup expired subscriptions:', error);
+    }
+  }
+
+  @Cron(CronExpression.EVERY_HOUR)
+async cleanupUnpaidSubscriptions() {
+  this.logger.log('Starting hourly cleanup for unpaid/pending subscriptions (with grace period)...');
+  try {
+    // keep pending subscriptions for at least 2 hours to allow updates/checkout
+    const graceMs = 1000 * 60 * 60 * 2; // 2 hours
+    const cutoff = new Date(Date.now() - graceMs);
+
+    const qb = this.repo.createQueryBuilder()
+      .delete()
+      .where('status_payement = :sp', { sp: 0 })
+      .andWhere('status_abonnement = :sa', { sa: 0 })
+      .andWhere('created_at < :cutoff', { cutoff: cutoff.toISOString() });
+
+    const result = await qb.execute();
+
+    const affected = (result.affected as number) || 0;
+    this.logger.log(`Deleted ${affected} unpaid pending subscriptions older than ${cutoff.toISOString()}`);
+  } catch (error) {
+    this.logger.error('Failed to cleanup unpaid subscriptions:', error);
+  }
+}
+}

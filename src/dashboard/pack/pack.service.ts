@@ -4,22 +4,46 @@ import { InjectRepository } from "@nestjs/typeorm";
 import { Pack } from "./pack.entity";
 import { createPackDto } from "../dtos/create-pack.dto";
 import { updatePackDto } from "../dtos/update-pack.dto";
-
+import * as crypto from 'crypto' ;
 // This is makes this calls Injectable 
 @Injectable()
 export class PackService {
+  
+
+
+
+  
+ 
+
+
     
 
     // We are using Dependency Injection 
     constructor( @InjectRepository(Pack) private repo:Repository<Pack>) {}
 
+  
+   async  getPackById(subscription_id: number) {
+    return this.repo.findOneBy({ id:subscription_id });
+  }
+
+
    findOne(id: number) {
     return this.repo.findOneBy({ id });
    }
 
-    async findAll() {
-        return this.repo.find();
-    }
+   async findAll() {
+  return this.repo.find({
+    where: {
+      is_active: true,
+      is_enterprise: false // or 1 if your column is tinyint
+    },
+  });
+}
+
+  async findAllAdmin(){
+  return this.repo.find();
+
+}
 
     async search(search:string) {
         return this.repo.find({
@@ -30,9 +54,18 @@ export class PackService {
     }
 
 async create(packData: createPackDto) {
+  // 1. Generate a unique string based on name + price + timestamp
+  const rawString = `${packData.name}-${packData.price}-${Date.now()}`;
+
+  // 2. Create a short unique code
+  const hash = crypto.createHash('sha256').update(rawString).digest('hex');
+  const uniqueCode = hash.substring(0, 8).toUpperCase(); // e.g. "A1B2C3D4"
+
+  // 3. Create the pack with the generated code
   const newPack = this.repo.create({
     name: packData.name,
     price: packData.price,
+    color: packData.color,
     deliverylimit: packData.deliverylimit,
     radius_km: packData.radius_km,
     min_order_amount: packData.min_order_amount,
@@ -43,6 +76,7 @@ async create(packData: createPackDto) {
     other_benefits: packData.other_benefits,
     is_active: packData.is_active,
     is_enterprise: packData.is_enterprise,
+    code: uniqueCode, // 👈 add the unique code here
     createdAt: packData.createdAt ?? new Date(),
   });
 

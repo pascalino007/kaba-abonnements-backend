@@ -18,6 +18,8 @@ import { AboOrdersService } from './abo-orders/abo-orders.service';
 import { updateabodto } from './dtos/update-abo.dto';
 import { sharedAbo } from './dtos/sharedAbo';
 import { OrderDto } from './dtos/create-order';
+import { AboHistoryService } from './abo-history/abo-history.service';
+import { UserSharedService } from './user_shared/user_shared.service';
 
 @Controller('dashboard')
 export class DashboardController {
@@ -25,8 +27,10 @@ export class DashboardController {
   // Dependency Injection Used
   constructor(
     private packService: PackService,
+    private aboHistoryService: AboHistoryService,
     private suscripionService: SuscriptionService,
     private AboOrdersService: AboOrdersService,
+    private userSharedService: UserSharedService,
   ) {}
 
   // get all pack
@@ -40,6 +44,11 @@ export class DashboardController {
     return this.packService.findAll();
   }
 
+   @Get('/packs_admin')
+  getPacksAdmin() {
+    return this.packService.findAllAdmin();
+  }
+
   // make a search => /dashboard?search='your search in name'
   @Get()
   findallpacks(@Query('search') search: string) {
@@ -49,10 +58,10 @@ export class DashboardController {
 
 
 
-  @Get('/:id_pack')
+  /* @Get('/:id_pack')
   async getPack(@Param('id_pack') id: string) {
     return this.packService.findOne(parseInt(id));
-  }
+  } */
 
   @Get('/countorders/:user_id')
   async getCountUserOrder(@Param('user_id') user_id: string) {
@@ -105,7 +114,7 @@ CurrentUserAbo(@Body() body: { userId: string }) {
     return this.packService.create({
       name: body.name,
       price: body.price,
-      color:body.color ,
+      color: body.color ,
       deliverylimit: body.deliverylimit,
       radius_km: body.radius_km,
       min_order_amount: body.min_order_amount,
@@ -152,6 +161,15 @@ CurrentUserAbo(@Body() body: { userId: string }) {
      
     });
   }
+
+ @Post('/between')
+async getBetweenDates(
+  @Body() body: { start: string; end: string },
+) {
+  const startDate = new Date(body.start);
+  const endDate = new Date(body.end);
+  return this.aboHistoryService.findBetweenDates(startDate, endDate);
+}
 
  
 

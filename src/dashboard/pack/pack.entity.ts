@@ -12,9 +12,8 @@ export class Pack {
   @Column('decimal', { precision: 10, scale: 2 })
   price: number;
 
- @Column()
+  @Column({default:'0xFFCD1F45'})
   color: string;
-
 
   @Column({ type: 'int', nullable: true })
   deliverylimit: number;
@@ -45,6 +44,9 @@ export class Pack {
 
   @Column({ default: false })
   is_enterprise: boolean;
+
+  @Column({ type: 'varchar', length: 20, default: '#00000' })
+  code: string;
 
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;

@@ -18,7 +18,17 @@ export class AboHistory {
  
   @Column()
   codeAbonnement:string ;
+  
+  @Column()
+  PrixAbo:String ;
+
+  @Column()
+  Nom_users:String ;
+
+  @Column()
+  Num_commande_used:string ;
 
   @CreateDateColumn({ type: 'timestamp' })
-  created_at: Date; 
+  created_at: Date;
+
 }
