@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { AboOrders } from './abo-orders.entity';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -43,11 +43,33 @@ export class AboOrdersService {
   return savedOrder;
 }
 
+async cancelOrder(command_id: string): Promise<AboOrders> {
+    // 1️⃣ Find order by command_id
+    const order = await this.repo.findOne({ where: { command_id } });
 
-   async countUserOrders(codeAbonnement: string): Promise<number> {
-    return this.repo.count({
-      where: { codeAbonnement: codeAbonnement },
-    });
+    if (!order) {
+      throw new NotFoundException(`Order with command_id ${command_id} not found`);
+    }
+
+    // 2️⃣ Update the status to 0 (cancelled)
+    order.status = 0;
+
+    // 3️⃣ Save the change
+    return await this.repo.save(order);
   }
+
+
+async countUserOrders(codeAbonnement: string): Promise<number> {
+  return this.repo.count({
+    where: {
+      codeAbonnement: codeAbonnement,
+      status: 1, // ✅ Only count active orders
+    },
+  });
+}
+
+
+
+  
 
 }

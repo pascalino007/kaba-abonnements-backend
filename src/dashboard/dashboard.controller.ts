@@ -169,9 +169,12 @@ async getBetweenDates(
   const startDate = new Date(body.start);
   const endDate = new Date(body.end);
   return this.aboHistoryService.findBetweenDates(startDate, endDate);
-}
+};
 
- 
+@Post('/cancel-order')
+  async cancelOrder(@Body('command_id') command_id: string) {
+    return await this.AboOrdersService.cancelOrder(command_id);
+  } 
 
 
 }

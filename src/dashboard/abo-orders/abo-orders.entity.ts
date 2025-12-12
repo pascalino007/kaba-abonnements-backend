@@ -20,6 +20,9 @@ export class AboOrders {
   @Column()
   prix_livraison:String ;
 
+  @Column({ type: 'int', default: 1 })
+  status: number;
+
   @CreateDateColumn({ type: 'timestamp' })
   created_at: Date; 
 

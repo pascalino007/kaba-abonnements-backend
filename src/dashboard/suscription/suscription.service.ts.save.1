@@ -26,16 +26,15 @@ export class SuscriptionService {
   if (!subscription) {
     return null;
   }
-  const alreadyUsed = await this.aboOrdersService.countUserOrders(subscription.codeAbonnement);
+  
   return {
     subscription_id: subscription.pack.name,
     status_payement: subscription.status_payement,
     status_abonnement: subscription.status_abonnement,
     codeAbonnement: subscription.codeAbonnement,
     end_date: subscription.end_date,
-    deliveriesUsed : alreadyUsed.toString(),
+    deliveriesUsed: ,
     deliveriesTotal: subscription.pack.deliverylimit
-
   };
 }
 
@@ -78,6 +77,9 @@ export class SuscriptionService {
 
 async findAll() {
   console.log('Fetching all active subscriptions');
+
+
+
 
   // 1️⃣ Fetch all active subscriptions with their packs
   const subscriptions = await this.repo.find({
@@ -127,7 +129,9 @@ async findAll() {
 }
 
 
+
   
+
    async getUserSubscriptionWithPack(userId: string) {
     console.log(`Fetching subscription for user: ${userId}`);
     const subscription = await this.repo
@@ -140,33 +144,15 @@ async findAll() {
       .getOne();
 
     if (!subscription) {
-       return {
-      status: 'no_abn',
-      user_id: userId,
-      start_date: null,
-      end_date: null,
-      payement_method: null,
-      transaction_id: null,
-      codeAbonnement: null,
-      pack: {
-        id: 0,
-        name: '',
-        price: 0,
-        duration_days: 0,
-        color: '',
-        radius_km: 0,
-        deliverylimit: 0,
-        discount_on_order: 0,
-        max_shared_users: 0,
-        other_benefits: '',
-        is_active: 0,
-        min_order_amount: 0,
-        is_shareable: 0,
-      },
-      alreadyUsed: 0,
-    };
+      return {
+        status: 'none',
+        message: 'No active subscription found',
+      };
     }
-     const alreadyUsed = await this.aboOrdersService.countUserOrders(subscription.codeAbonnement);
+  
+     const alreadyUsed = await this.aboOrdersService.countUserOrders(userId);
+
+
     return {
       status: 'success',
       
@@ -468,8 +454,7 @@ async findByUserAndCode(user_id: string, codeAbonnement: string): Promise<Suscri
   // Check delivery limits if they exist
   const usedDeliveries = await this.aboOrdersService.countUserOrders(subscription.codeAbonnement);
   const pack = await this.packService.getPackById(subscription.subscription_id);
-  console.log('pack from check validity : '+ pack?.deliverylimit) ; 
-  console.log('usedDelivery from checkValidity : ' + usedDeliveries) ;
+  
   if (pack && usedDeliveries >= pack.deliverylimit) {
     await this.deactivateExpiredSubscription(subscription);
     return false;
@@ -481,12 +466,10 @@ async findByUserAndCode(user_id: string, codeAbonnement: string): Promise<Suscri
 private async deactivateExpiredSubscription(subscription: Suscription): Promise<void> {
   try {
     // Update subscription status
-     
-    
     subscription.status_abonnement = 0;
     
     // Save the deactivated subscription
-    await this.repo.delete(subscription.id);
+    await this.repo.save(subscription);
 
     // Create history entry for deactivation
     /* await this.AboHistoryService.create({
@@ -505,7 +488,7 @@ private async deactivateExpiredSubscription(subscription: Suscription): Promise<
   }
 }
 
-@Cron(CronExpression.EVERY_MINUTE)
+@Cron(CronExpression.EVERY_DAY_AT_MIDNIGHT)
 async cleanupExpiredSubscriptions() {
     this.logger.log('Starting daily subscription cleanup...');
     try {
@@ -531,5 +514,26 @@ async cleanupExpiredSubscriptions() {
     }
   }
 
+  @Cron(CronExpression.EVERY_HOUR)
+async cleanupUnpaidSubscriptions() {
+  this.logger.log('Starting hourly cleanup for unpaid/pending subscriptions (with grace period)...');
+  try {
+    // keep pending subscriptions for at least 2 hours to allow updates/checkout
+    const graceMs = 1000 * 60 * 60 * 2; // 2 hours
+    const cutoff = new Date(Date.now() - graceMs);
 
+    const qb = this.repo.createQueryBuilder()
+      .delete()
+      .where('status_payement = :sp', { sp: 0 })
+      .andWhere('status_abonnement = :sa', { sa: 0 })
+      .andWhere('created_at < :cutoff', { cutoff: cutoff.toISOString() });
+
+    const result = await qb.execute();
+
+    const affected = (result.affected as number) || 0;
+    this.logger.log(`Deleted ${affected} unpaid pending subscriptions older than ${cutoff.toISOString()}`);
+  } catch (error) {
+    this.logger.error('Failed to cleanup unpaid subscriptions:', error);
+  }
+}
 }

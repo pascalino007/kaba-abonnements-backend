@@ -23,7 +23,7 @@ import { ScheduleModule } from '@nestjs/schedule';
     port: 3306,
     database:'abonnements',
     username:'root',
-    password: 'password',
+    password: 'NewStrongPassword123!',
   autoLoadEntities: true,
   synchronize: true,
   entities:[Pack]
